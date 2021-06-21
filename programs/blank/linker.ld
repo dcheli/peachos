@@ -1,8 +1,8 @@
 ENTRY(_start)
-OUTPUT_FORMAT(binary)   /* Create a flat binary file */
+OUTPUT_FORMAT(elf32-i386)
 SECTIONS
 {
-    . = 0x4000000;
+    . = 0x400000;
     .text : ALIGN(4096)
     {
         *(.text)
@@ -15,7 +15,7 @@ SECTIONS
     
     .rodata : ALIGN(4096)
     {
-        *(.rdata)
+        *(.rodata)
     }
 
     .data : ALIGN(4096)
@@ -24,9 +24,9 @@ SECTIONS
     }
 
     .bss : ALIGN(4096)
-    {  
+    {
         *(COMMON)
-        *.(.bss)
+        *(.bss)
     }
 
 }

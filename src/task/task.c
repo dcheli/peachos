@@ -7,6 +7,7 @@
 #include "idt/idt.h"
 #include "memory/paging/paging.h"
 #include "string/string.h"
+#include "loader/formats/elfloader.h"
 
 int task_init(struct task *task, struct process *process);
 
@@ -92,6 +93,16 @@ int task_switch(struct task *task){
     return 0;
 }
 
+void task_next(){
+    struct task *next_task = task_get_next();
+    if(!next_task){
+        panic("no more tasks\n");
+    }
+
+    task_switch(next_task);
+    task_return(&next_task->registers);
+}
+
 void task_save_state(struct task *task, struct interrupt_frame *frame){
     task->registers.ip = frame->ip;
     task->registers.cs = frame->cs;
@@ -121,9 +132,9 @@ int copy_string_from_task(struct task *task, void *virtual, void *phys, int max)
 
     uint32_t *task_directory = task->page_directory->directory_entry;
     uint32_t old_entry = paging_get(task_directory, tmp);
-    paging_map(task->page_directory, tmp, tmp, PAGING_IS_WRITABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
+    paging_map(task->page_directory, tmp, tmp, PAGING_IS_WRITEABLE | PAGING_IS_PRESENT | PAGING_ACCESS_FROM_ALL);
     paging_switch(task->page_directory);
-    strncpy(tmp, virtual, max);
+    strncpy(tmp, virtual, max);     // copy from the virtual address to tmp buffer
     kernel_page();
 
     res = paging_set(task_directory, tmp, old_entry);
@@ -132,7 +143,7 @@ int copy_string_from_task(struct task *task, void *virtual, void *phys, int max)
         goto out_free;
     }
 
-    strncpy(phys, tmp, max);
+    strncpy(phys, tmp, max);        // copy from the tmp buffer to the physical address
 
 out_free:
     kfree(tmp);
@@ -183,6 +194,10 @@ int task_init(struct task *task, struct process *process){
     }
 
     task->registers.ip = PEACHOS_PROGRAM_VIRTUAL_ADDRESS;
+    if(process->filetype == PROCESS_FILE_TYPE_ELF){
+        task->registers.ip = elf_header(process->elf_file)->e_entry;
+    }
+    
     task->registers.ss = USER_DATA_SEGMENT;
     task->registers.cs = USER_CODE_SEGMENT;
     task->registers.esp = PEACHOS_PROGRAM_VIRTUAL_STACK_ADDRESS_START;
@@ -205,4 +220,9 @@ void* task_get_stack_item(struct task *task, int index){
     kernel_page();
 
     return result;
+}
+
+void* task_virtual_address_to_physical(struct task *task, void *virtual_address){
+    
+    return  paging_get_physical_address(task->page_directory->directory_entry, virtual_address);
 }
